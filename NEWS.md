@@ -1,3 +1,33 @@
+# czso 0.3.2
+
+* minor README edit for CRAN resubmission 
+
+# czso 0.3.1
+
+* minor README edits for CRAN resubmission 
+
+# czso 0.3.0
+
+## New features
+
+* codelists (číselníky) can now be retrieved with `czso_get_codelist()`. This includes hierarchies between codelist items, and English versions where available
+
+## Improvements
+
+* new `dest_dir` parameter in `czso_get_[table|codelist]()` allows you to store downloaded data files in a custom location. This location can be set at script or user (.Rprofile) level by setting the `czso.dest_dir` option.
+* improved UI: more informative and better formatted messages, hints and reminders about common mishaps
+* documentation added in `czso_get_table()` on where to get definitions of indicators and variables used by CZSO.
+* more date-type columns are parsed and typed correctly
+
+## Bug fixes
+
+* deprecated functions no longer used internally
+* encoding guess no longer breaks on Linux (@jlacko)
+
+## Deprecations of functions with old names
+
+* functions named `get_czso_*` are now deprecated and will emit a warning if used. Use `czso_*()` instead.
+
 # czso 0.2.3
 
 ## Fixes responding to CRAN feedback

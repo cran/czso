@@ -4,17 +4,25 @@
 \alias{czso_get_table}
 \title{Retrieve and read dataset from CZSO}
 \usage{
-czso_get_table(dataset_id, force_redownload = FALSE, resource_num = 1)
+czso_get_table(
+  dataset_id,
+  dest_dir = NULL,
+  force_redownload = FALSE,
+  resource_num = 1
+)
 }
 \arguments{
 \item{dataset_id}{a character. Found in the czso_id column of data frame returned by \code{get_catalogue()}.}
+
+\item{dest_dir}{character. Directory in which downloaded files will be stored.
+If left unset, will use the \code{czso.dest_dir} option if the option is set, and \code{tempdir()} otherwise. Will be created if it does not exist.}
 
 \item{force_redownload}{integer. Whether to redownload data source file even if already cached. Defaults to FALSE.}
 
 \item{resource_num}{integer. Order of resource in resource list for the given dataset. Defaults to 1, the normal value for CZSO datasets.}
 }
 \value{
-a tibble, or vector of file paths if file is not CSV or if
+a \link[tibble:tibble-package]{tibble}, or vector of file paths if file is not CSV or if
 there are multiple files in the dataset.
 See Details on the columns contained in the tibble
 }
@@ -38,7 +46,7 @@ The schema of the dataset is not yet used, so some columns may be mistyped and a
 
 \subsection{Included columns}{
 
-The range of columns present in the output vary from one dataset to another,
+The range of columns present in the output varies from one dataset to another,
 so the package does not attempt to provide English-language names for
 the known subset, as that would result in a jumble of Czenglish.
 
@@ -51,6 +59,8 @@ identification should you need it.
 \item \code{stapro_kod}: code of the statistic/indicator/variable as listed.
 in the SMS UKAZ register (https://www.czso.cz/csu/czso/statistical-variables-indicators);
 this one has Czech-English documentation - access this by clicking the UK flag top right.
+You can also get a data table with the definitions, if you search for \code{"statistické proměnné"} in
+the \code{title} field of the catalogue. Last I checked, the ID of this table was \code{"990124-17"}.
 \item \code{rok} denotes year as YYYY.
 \item \code{ctvrtleti} denotes quarter if available.
 }
@@ -61,8 +71,10 @@ ID of the codelist (register) you need to decode the code in \verb{_kod}.
 The English codelists are at http://apl.czso.cz/iSMS/en/cislist.jsp,
 Czech ones at http://apl.czso.cz/iSMS/cs/cislist.jsp.
 You can find the Czech-language codelists in the catalogue retrieved with
-\code{czso_get_catalogue()}; the English ones can also be retrieved from
+\code{czso_get_catalogue()}, where their IDs begin with \code{"cis"} followed by the number; the English ones can also be retrieved from
 the link above using a permalink URL.
+
+More conveniently, you can use the \code{czso_get_codelist()} function to retrieve the codelist.
 
 Units are denoted in a separate column.
 

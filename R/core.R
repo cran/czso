@@ -113,27 +113,27 @@ czso_get_catalogue <- function() {
 
 #' Deprecated: use `czso_get_catalogue()` instead
 #'
-#' \lifecycle{soft-deprecated}
+#' \lifecycle{deprecated}
 #'
 #' @return a tibble
 #' @examples
 #' # see `czso_get_catalogue()`
 #' @export
 get_catalogue <- function() {
-  lifecycle::deprecate_soft("0.2.0", "czso::get_catalogue()", "czso_get_catalogue()")
+  lifecycle::deprecate_warn("0.2.0", "czso::get_catalogue()", "czso_get_catalogue()")
   czso_get_catalogue()
 }
 
 #' Deprecated, use `czso_get_catalogue()` instead.
 #'
-#' \lifecycle{soft-deprecated}
+#' \lifecycle{deprecated}
 #'
 #' @return a tibble
 #' @examples
 #' # see `czso_get_catalogue()`
 #' @export
 get_czso_catalogue <- function() {
-  lifecycle::deprecate_soft("0.2.1", "czso::get_czso_catalogue()", "czso_get_catalogue()")
+  lifecycle::deprecate_warn("0.2.1", "czso::get_czso_catalogue()", "czso_get_catalogue()")
   czso_get_catalogue()
 }
 
@@ -183,7 +183,7 @@ czso_get_dataset_metadata <- function(dataset_id) {
 
 #' Deprecated, use `czso_get_catalogue()` instead.
 #'
-#' \lifecycle{soft-deprecated}
+#' \lifecycle{deprecated}
 #'
 #' @inheritParams czso_get_dataset_metadata
 #'
@@ -191,7 +191,7 @@ czso_get_dataset_metadata <- function(dataset_id) {
 #' @export
 #' @family Additional tools
 get_czso_dataset_metadata <- function(dataset_id) {
-  lifecycle::deprecate_soft("0.2.1", "czso::get_czso_dataset_metadata()",
+  lifecycle::deprecate_warn("0.2.1", "czso::get_czso_dataset_metadata()",
                             "czso_get_dataset_metadata()")
   czso_get_dataset_metadata(dataset_id = dataset_id)
 }
@@ -200,11 +200,57 @@ get_czso_resources <- function(dataset_id) {
   return(mtdt$resources)
 }
 
+
+# Internal utilities ------------------------------------------------------
+
+read_czso_csv <- function(dfile) {
+  guessed_enc <- readr::guess_encoding(dfile)
+  guessed_enc <- ifelse(length(guessed_enc$encoding) == 0 || guessed_enc$encoding[[1]] == "windows-1252",
+                        "windows-1250", # a sensible default, considering...
+                        guessed_enc$encoding[1])
+  dt <- suppressWarnings(suppressMessages(readr::read_csv(dfile, col_types = readr::cols(.default = "c",
+                                                                                         rok = "i",
+                                                                                         ADMPLOD = readr::col_date("%d.%m.%Y"),
+                                                                                         ADMNEPO = readr::col_date("%d.%m.%Y"),
+                                                                                         casref_od = "T",
+                                                                                         casref_do = "T",
+                                                                                         obdobiod = "T",
+                                                                                         obdobido = "T",
+                                                                                         bazobdobiod = "T",
+                                                                                         bazobdobido = "T",
+                                                                                         ctvrtleti = "i",
+                                                                                         hodnota = "d"),
+                                                          locale = readr::locale(encoding = guessed_enc))))
+}
+
+download_if_needed <- function(url, dfile, force_redownload) {
+  if(file.exists(dfile) & !force_redownload) {
+    usethis::ui_info(c("File already in {usethis::ui_path(dirname(dfile))}, not downloading.",
+                       "Set {usethis::ui_code('force_redownload = TRUE')} if needed."))
+  } else {
+    curl_handle <- curl::new_handle() %>%
+      curl::handle_setheaders(.list = ua_header)
+    curl::curl_download(url, dfile, handle = curl_handle)
+  }
+}
+
+get_dl_path <- function(dataset_id, dir = tempdir(), ext) {
+  td <- file.path(dir, dataset_id)
+  dir.create(td, showWarnings = FALSE, recursive = TRUE)
+  dfile <- paste0(td, "/ds_", dataset_id, ".", ext)
+  return(dfile)
+}
+
 get_czso_resource_pointer <- function(dataset_id, resource_num = 1) {
   rsrc <- get_czso_resources(dataset_id)[resource_num,] %>%
     dplyr::select(.data$url, .data$format, meta_link = .data$describedBy, meta_format = .data$describedByType)
   return(rsrc)
 }
+
+
+# Key workflow ------------------------------------------------------------
+
+
 
 #' Retrieve and read dataset from CZSO
 #'
@@ -226,7 +272,7 @@ get_czso_resource_pointer <- function(dataset_id, resource_num = 1) {
 #'
 #' ## Included columns
 #'
-#' The range of columns present in the output vary from one dataset to another,
+#' The range of columns present in the output varies from one dataset to another,
 #' so the package does not attempt to provide English-language names for
 #' the known subset, as that would result in a jumble of Czenglish.
 #'
@@ -239,6 +285,8 @@ get_czso_resource_pointer <- function(dataset_id, resource_num = 1) {
 #' - `stapro_kod`: code of the statistic/indicator/variable as listed.
 #' in the SMS UKAZ register (https://www.czso.cz/csu/czso/statistical-variables-indicators);
 #' this one has Czech-English documentation - access this by clicking the UK flag top right.
+#' You can also get a data table with the definitions, if you search for `"statistické proměnné"` in
+#' the `title` field of the catalogue. Last I checked, the ID of this table was `"990124-17"`.
 #' - `rok` denotes year as YYYY.
 #' - `ctvrtleti` denotes quarter if available.
 #'
@@ -248,8 +296,10 @@ get_czso_resource_pointer <- function(dataset_id, resource_num = 1) {
 #' The English codelists are at http://apl.czso.cz/iSMS/en/cislist.jsp,
 #' Czech ones at http://apl.czso.cz/iSMS/cs/cislist.jsp.
 #' You can find the Czech-language codelists in the catalogue retrieved with
-#'  `czso_get_catalogue()`; the English ones can also be retrieved from
+#'  `czso_get_catalogue()`, where their IDs begin with `"cis"` followed by the number; the English ones can also be retrieved from
 #'  the link above using a permalink URL.
+#'
+#'  More conveniently, you can use the `czso_get_codelist()` function to retrieve the codelist.
 #'
 #'  Units are denoted in a separate column.
 #'
@@ -264,10 +314,12 @@ get_czso_resource_pointer <- function(dataset_id, resource_num = 1) {
 #' @note Do not use this for harvesting datasets from CZSO en masse.
 #'
 #' @param dataset_id a character. Found in the czso_id column of data frame returned by `get_catalogue()`.
+#' @param dest_dir character. Directory in which downloaded files will be stored.
+#' If left unset, will use the `czso.dest_dir` option if the option is set, and `tempdir()` otherwise. Will be created if it does not exist.
 #' @param resource_num integer. Order of resource in resource list for the given dataset. Defaults to 1, the normal value for CZSO datasets.
 #' @param force_redownload integer. Whether to redownload data source file even if already cached. Defaults to FALSE.
 #'
-#' @return a tibble, or vector of file paths if file is not CSV or if
+#' @return a [tibble][tibble::tibble-package], or vector of file paths if file is not CSV or if
 #' there are multiple files in the dataset.
 #' See Details on the columns contained in the tibble
 #' @family Core workflow
@@ -276,28 +328,33 @@ get_czso_resource_pointer <- function(dataset_id, resource_num = 1) {
 #' czso_get_table("110080")
 #' }
 #' @export
-czso_get_table <- function(dataset_id, force_redownload = FALSE, resource_num = 1) {
-  ptr <- get_czso_resource_pointer(dataset_id)
+czso_get_table <- function(dataset_id, dest_dir = NULL, force_redownload = FALSE, resource_num = 1) {
+
+  if(stringr::str_detect(dataset_id, "^cis")) {
+    usethis::ui_info("The dataset you are fetching seems to be a codelist.")
+    usethis::ui_todo("Use {ui_code(x = stringr::str_glue('czso_get_codelist(\"{dataset_id}\")'))} to load it using a dedicated function.")
+  }
+
+  ptr <- get_czso_resource_pointer(dataset_id, resource_num = resource_num)
   url <- ptr$url
   type <- ptr$format
   ext <- tools::file_ext(url)
-  if(ext == "") ext <- stringr::str_extract(type, "(?<=\\/).*$")
-  td <- paste(tempdir(), "czso", dataset_id, sep = "/")
-  dir.create(td, showWarnings = FALSE, recursive = TRUE)
-  dfile <- paste0(td, "/ds_", dataset_id, ".", ext)
-  if(file.exists(dfile) & !force_redownload) {
-    usethis::ui_info("File already in {td}, not downloading. Set `force_redownload` to TRUE if needed.")
-  } else {
-    utils::download.file(url, dfile, headers = ua_header)
-  }
+  if(ext == "" | is.null(ext)) ext <- stringr::str_extract(type, "(?<=\\/).*$")
+
+  if(is.null(dest_dir)) dest_dir <- getOption("czso.dest_dir",
+                                              default = tempdir())
+
+  dfile <- get_dl_path(dataset_id, dest_dir, ext)
+
+  download_if_needed(url, dfile, force_redownload)
 
   # print(dfile)
 
   if(type == "text/csv") {
     action <- "read"
   } else if(type == "application/zip") {
-    utils::unzip(dfile, exdir = td)
-    flist <- list.files(td, pattern = "(CSV|csv)$")
+    utils::unzip(dfile, exdir = dirname(dfile))
+    flist <- list.files(dirname(dfile), pattern = "(CSV|csv)$")
     if((length(flist) == 1) & (tools::file_ext(flist[1]) %in% c("CSV", "csv"))) {
       action <- "read"
     } else if (length < 1) {
@@ -311,47 +368,175 @@ czso_get_table <- function(dataset_id, force_redownload = FALSE, resource_num = 
   }
   switch (action,
           read = {
-            guessed_enc <- readr::guess_encoding(dfile)[[1,1]]
-            if(guessed_enc == "windows-1252") guessed_enc <- "windows-1250"
-            dt <- suppressWarnings(suppressMessages(readr::read_csv(dfile, col_types = readr::cols(.default = "c",
-                                                                                                   rok = "i",
-                                                                                                   casref_do = "T",
-                                                                                                   ctvrtleti = "i",
-                                                                                                   hodnota = "d"),
-                                                                 locale = readr::locale(encoding = guessed_enc))))
-            rtrn <- dt
+            rtrn <- read_czso_csv(dfile)
+            invi <- F
           },
           listone = {
-            message(paste0("Unable to read this kind of file (",  type, ") automatically. It is saved in ", dfile, "."))
+            usethis::ui_info(c("Unable to read this kind of file ({type}) automatically.",
+                               "It is saved in {usethis::ui_path(dfile)}."))
             rtrn <- dfile
+            invi <- T
           },
           listmore = {
-            message(paste0("Multiple files in archive. They are saved in ", td))
+            usethis::ui_info(c("Multiple files in archive.",
+                               "They are saved in {usethis::ui_path(dfile)}"))
             rtrn <- flist
+            invi <- T
 
           }
   )
-  return(rtrn)
+  if(invi) invisible(rtrn) else return(rtrn)
 }
 
 
 #' Deprecated: use `czso_get_table()` instead.
 #'
-#' \lifecycle{soft-deprecated}.
+#' \lifecycle{deprecated}.
 #'
 #' @inheritParams czso_get_table
 #'
-#' @return a tibble
+#' @return a [tibble][tibble::tibble-package]
 #' @family Core workflow
 #' @examples
 #' # see `czso_get_table()`
 #' @export
 get_table <- function(dataset_id, resource_num = 1, force_redownload = FALSE) {
-  lifecycle::deprecate_soft("0.2.0", "czso::get_catalogue()", "czso_get_catalogue()")
+  lifecycle::deprecate_warn("0.2.0", "czso::get_catalogue()", "czso_get_catalogue()")
   czso_get_table(dataset_id = dataset_id,
                  resource_num = resource_num,
                  force_redownload = force_redownload)
 }
+
+#' Get CZSO codelist (registry / číselník)
+#'
+#' Downloads codelist (registry table) and returns it in a tibble.
+#' Codelists are canonical lists of entities, their names and IDs. See Details.
+#' Codelists are included in catalogue which can be retrieved using `czso_get_catalogue()`.
+#' Their IDs start with `"cis"` followed by a two- to three-digit number.
+#'
+#' ## Codelists
+#'
+#' Codelists are canonical registries of entities:
+#' things, statistical areas and aggregates, concepts, categorisations.
+#' A codelist typically contains IDs and names of all the entities fitting into
+#' a certain category.
+#'
+#' The most commonly used codelists are geographical, e.g. lists of regions or
+#' municipalities.
+#'
+#' In the world of the CZSO, each codelist has a numeric ID of two to four digits.
+#' You can pass this number to the function (even as a string), or you can pass the dataset ID found
+#' in the catalogue; the latter will have the form of e.g. `"cisNN"`.
+#'
+#' ### Relationships between codelists ("vazba mezi číselníky")
+#'
+#' The CZSO data store also holds tables describing relations between codelists.
+#' This is especially useful for spatial hierarchies (e.g. which towns belong to which region), or for converting
+#'  between categorisations (e.g. two different sets of IDs for regions.)
+#'
+#' You can pass a vector of two IDs (numeric or character) and if the relational
+#' table for these two exists, it will be returned. (If it does not work,
+#' try flipping them around). The equivalent dataset ID, as found in the catalogue,
+#' is `"cisXXvazYY"`.
+#'
+#' ## Columns in output
+#'
+#' For single-codelist files, see below for the most commonly included columns.
+#' For relational tables, you will see each column twice, each time with a suffix of 1 or 2.
+#'
+#' - AKRCIS: codelist abbreviation
+#' - KODCIS: codelist ID
+#' - CHODNOTA: entity ID
+#' - TEXT: entity name
+#' - ZKRTEXT: entity name abbreviated
+#' - ADMPLOD: valid from
+#' - ADMNEPO: invalid after
+#' - KOD_RUIAN: for geographical entites, RUIAN code (different master registry run by the geodesists)
+#' - CZNUTS: for geographical entities, NUTS code
+#'
+#' @param codelist_id character or numeric of length 1 or 2; ID of codelist to download. See Details.
+#' @param language language, either "cs" (the default) or "en", which is available for some codelists.
+#' @param dest_dir character. Directory in which downloaded files will be stored.
+#' If left unset, will use the `czso.dest_dir` option if the option is set, and `tempdir()` otherwise. Will be created if it does not exist.
+#' @param resource_num integer, order of resource. Only override if you need a different format.
+#' @param force_redownload whether to download even if a cached local file is available.
+#'
+#' @return a [tibble][tibble::tibble-package] All columns except dates kept as character.
+#' See Details for the columns.
+#' @examples
+#' \donttest{
+#' czso_get_codelist("cis100")
+#'
+#' # equivalent
+#' czso_get_codelist(100)
+#'
+#' # get a table of relations between two codelists
+#' czso_get_codelist(c(100, 43))
+#'
+#' # equivalent
+#' czso_get_codelist("cis100vaz43")
+#' }
+#' @export
+czso_get_codelist <- function(codelist_id,
+                              language = c("cs", "en"),
+                              dest_dir = NULL,
+                              resource_num = NULL,
+                              force_redownload = F) {
+
+  lng <- match.arg(language)
+
+  stopifnot(length(codelist_id) <= 2)
+
+  if(length(codelist_id) == 1) {
+    if(is.numeric(codelist_id) | stringr::str_detect(codelist_id,
+                                                     "^[0-9]{2,4}$")) {
+      codelist_id <- paste0("cis", codelist_id)
+    }
+  } else if(length(codelist_id) == 2) {
+    if(is.numeric(codelist_id) | all(stringr::str_detect(codelist_id,
+                                                         "^[0-9]{2,4}$"))) {
+      codelist_id <- paste0("cis", codelist_id[1], "vaz", codelist_id[2])
+    }
+  }
+
+  if(!stringr::str_detect(codelist_id, "^cis")) {
+    usethis::ui_info(c("The value you passed to {usethis::ui_field('codelist_id')} does not seem to indicate a codelist.",
+                       "This may cause unexpected results."))
+  }
+
+  cis_meta <- get_czso_resources(codelist_id)
+
+  cis_url <- cis_meta[cis_meta$format == "text/csv", "url"]
+
+  if(length(cis_url) < 1) {
+    # usethis::ui_stop(c("No CSV distribution for this codelist found.",
+    #                    "You can download the codelist in the format provided using {ui_code(x = stringr::str_glue('czso_get_table(\"{codelist_id}\")'))} and read it in manually.",
+    #                    "Use {ui_code(x = stringr::str_glue('czso_get_dataset_metadata(\"{codelist_id}\")'))} to see which formats are available."))
+
+    if(is.null(resource_num)) resource_num <- 1
+
+    usethis::ui_info("No documented CSV distribution found for this codelist. Using workaround.")
+
+    cis_url <- get_czso_resource_pointer(codelist_id, 1)[["url"]]
+    cis_url <- stringr::str_replace(cis_url, "format\\=0$", "format=2&separator=,")
+  }
+
+  if(lng == "en") cis_url <- stringr::str_replace(cis_url, "cisjaz=203", "cisjaz=8260")
+
+  if(is.null(dest_dir)) dest_dir <- getOption("czso.dest_dir",
+                                              default = tempdir())
+  dfile <- get_dl_path(codelist_id, dest_dir, "csv")
+
+  download_if_needed(cis_url, dfile, force_redownload)
+
+  dt <- read_czso_csv(dfile)
+
+  return(dt)
+}
+
+
+# Utilities ---------------------------------------------------------------
+
 
 
 #' Get CZSO table schema
@@ -397,7 +582,7 @@ czso_get_table_schema <- function(dataset_id, resource_num = 1) {
 
 #' Deprecated: use `czso_get_table_schema()` instead
 #'
-#' \lifecycle{soft-deprecated}
+#' \lifecycle{deprecated}
 #'
 #' @inheritParams czso_get_table_schema
 #'
@@ -405,7 +590,7 @@ czso_get_table_schema <- function(dataset_id, resource_num = 1) {
 #' @export
 #' @family Additional tools
 get_czso_table_schema <- function(dataset_id, resource_num) {
-  lifecycle::deprecate_soft("0.2.1", "czso::get_czso_table_schema()",
+  lifecycle::deprecate_warn("0.2.1", "czso::get_czso_table_schema()",
                             "czso_get_table_schema()")
   czso_get_table_schema(dataset_id = dataset_id, resource_num = resource_num)
 }
@@ -432,7 +617,7 @@ get_czso_table_schema <- function(dataset_id, resource_num) {
 #' @export
 #' @family Additional tools
 czso_get_dataset_doc <- function(dataset_id,  action = c("return", "open", "download"), destfile = NULL, format = c("html", "pdf", "word")) {
-  metadata <- get_czso_dataset_metadata(dataset_id)
+  metadata <- czso_get_dataset_metadata(dataset_id)
   frmt <- match.arg(format)
   url_orig <- metadata$schema
   doc_url <- switch (frmt,
@@ -444,17 +629,17 @@ czso_get_dataset_doc <- function(dataset_id,  action = c("return", "open", "down
   if(is.null(destfile)) {dest <- basename(doc_url)} else {dest <- destfile}
   switch(act,
          open = {
-           usethis::ui_done("Opening {doc_url} in browser")
+           usethis::ui_done("Opening {usethis::ui_path(doc_url)} in browser")
            utils::browseURL(doc_url)},
          download = {utils::download.file(doc_url, destfile = dest, headers = ua_header, quiet = TRUE)
-           usethis::ui_done("Downloaded {doc_url} to {dest}")})
+           usethis::ui_done("Downloaded {usethis::ui_path(doc_url)} to {usethis::ui_path(dest)}")})
   if(act == "download") rslt <- dest else rslt <- doc_url
   if(act == "return") rslt else invisible(rslt)
 }
 
 #' Deprecated: use `czso_get_dataset_doc()` instead
 #'
-#' \lifecycle{soft-deprecated}
+#' \lifecycle{deprecated}
 #'
 #' @inheritParams czso_get_dataset_doc
 #'
@@ -462,7 +647,9 @@ czso_get_dataset_doc <- function(dataset_id,  action = c("return", "open", "down
 #' @export
 #' @family Additional tools
 get_czso_dataset_doc <- function(dataset_id,  action = c("return", "open", "download"), destfile = NULL, format = c("html", "pdf", "word")) {
-  lifecycle::deprecate_soft("0.2.1", "czso::get_czso_dataset_doc()",
+  lifecycle::deprecate_warn("0.2.1", "czso::get_czso_dataset_doc()",
                             "czso_get_dataset_doc()")
   czso_get_dataset_doc(dataset_id = dataset_id, action = action, destfile = destfile, format = format)
 }
+
+

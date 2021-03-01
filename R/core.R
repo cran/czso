@@ -27,9 +27,12 @@ czso_get_catalogue <- function() {
   sparql_url <- "https://data.gov.cz/sparql"
 
   sparqlquery_datasets_byczso <- stringr::str_glue(
-    "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+  "PREFIX foaf: <http://xmlns.com/foaf/0.1/>
    PREFIX dcterms: <http://purl.org/dc/terms/>
    PREFIX dcat: <http://www.w3.org/ns/dcat#>
+   PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+   PREFIX schema: <http://schema.org/>
+   PREFIX ovmr: <https://rpp-opendata.egon.gov.cz/odrpp/zdroj/org\\u00e1n-ve\\u0159ejn\\u00e9-moci/>
    PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 
@@ -43,37 +46,35 @@ czso_get_catalogue <- function() {
    ?modified
    ?page
    ?periodicity
-   ?periodicity_abb
+   # ?periodicity_abb
    ?start
    ?end
    ?keywords_all
    WHERE {{
      GRAPH ?g {{
        ?dataset_iri a dcat:Dataset .
+       ?dataset_iri dcterms:publisher ovmr:00025593 .
        ?dataset_iri dcterms:publisher ?publisher .
        ?dataset_iri dcterms:title ?title .
        ?dataset_iri dcterms:description ?description .
+       ?dataset_iri dcterms:accrualPeriodicity ?periodicity .
+       # ?periodicity skos:prefLabel ?periodicity_abb .
        OPTIONAL {{ ?dataset_iri dcterms:identifier ?dataset_id .}}
        OPTIONAL {{ ?dataset_iri dcterms:spatial ?spatial .}}
-       OPTIONAL {{ ?dataset_iri foaf:page ?page.}}
+       OPTIONAL {{ ?dataset_iri foaf:page ?page .}}
        OPTIONAL {{ ?dataset_iri dcterms:temporal ?temporal .}}
        OPTIONAL {{ ?dataset_iri dcterms:modified ?modified .}}
        OPTIONAL {{ ?dataset_iri dcat:keyword ?keywords_all .}}
-       OPTIONAL {{ ?dataset_iri dcterms:accrualPeriodicity ?periodicity .}}
-       OPTIONAL {{ ?dataset_iri <https://data.gov.cz/slovn\\u00edk/nkod/accrualPeriodicity> ?periodicity_abb .}}
 
        ?publisher foaf:name ?provider .
 
-       OPTIONAL {{ ?temporal schema:startDate ?start .}}
-       OPTIONAL {{ ?temporal schema:endDate ?end .}}
+       OPTIONAL {{ ?temporal dcat:startDate ?start .}}
+       OPTIONAL {{ ?temporal dcat:endDate ?end .}}
 
-       VALUES ?publisher {{
-         <https://data.gov.cz/zdroj/ovm/00025593> # IRI pro CZSO
-         # <https://data.gov.cz/zdroj/ovm/00064581> # IRI pro Prahu
-       }}
-       FILTER(lang(?provider) = \"cs\")
-       FILTER(lang(?keywords_all) = \"cs\")
-       FILTER(lang(?title) = \"cs\")
+       # FILTER(lang(?provider) = \"cs\")
+       # FILTER(lang(?keywords_all) = \"cs\")
+       # FILTER(lang(?title) = \"cs\")
+       # FILTER(lang(?periodicity_abb) = \"en\")
      }}
   }}") %>% stringi::stri_unescape_unicode()
 
@@ -332,7 +333,7 @@ czso_get_table <- function(dataset_id, dest_dir = NULL, force_redownload = FALSE
 
   if(stringr::str_detect(dataset_id, "^cis")) {
     usethis::ui_info("The dataset you are fetching seems to be a codelist.")
-    usethis::ui_todo("Use {ui_code(x = stringr::str_glue('czso_get_codelist(\"{dataset_id}\")'))} to load it using a dedicated function.")
+    usethis::ui_todo("Use {usethis::ui_code(x = stringr::str_glue('czso_get_codelist(\"{dataset_id}\")'))} to load it using a dedicated function.")
   }
 
   ptr <- get_czso_resource_pointer(dataset_id, resource_num = resource_num)
@@ -401,7 +402,7 @@ czso_get_table <- function(dataset_id, dest_dir = NULL, force_redownload = FALSE
 #' # see `czso_get_table()`
 #' @export
 get_table <- function(dataset_id, resource_num = 1, force_redownload = FALSE) {
-  lifecycle::deprecate_warn("0.2.0", "czso::get_catalogue()", "czso_get_catalogue()")
+  lifecycle::deprecate_warn("0.2.0", "czso::get_table()", "czso_get_table()")
   czso_get_table(dataset_id = dataset_id,
                  resource_num = resource_num,
                  force_redownload = force_redownload)

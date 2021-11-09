@@ -1,14 +1,14 @@
-08378af6d724ced5bb62aece080934bd *DESCRIPTION
+7b8f322485cf89f2a6431402052df2ef *DESCRIPTION
 e93612f822b7371354b4b2e86d778f22 *LICENSE
 dceef644bccf95d89382a7f64b4d2681 *NAMESPACE
-f3012c2f113ce2efb11942c16a9e4d3b *NEWS.md
-eef782bccac14da26fc388dc91f1b4d2 *R/core.R
+ec3ebb6f7cc580d4fbe04d4082c41256 *NEWS.md
+bf8b5249da6562ca0e79704ade6094ca *R/core.R
 2ceb631661c9e6da40a6429a5b49525b *R/czso-package.R
 65cef5e0674056f6fc07dd2b3ca85c13 *R/utils-pipe.R
 02d7b3ad5518c1dc1a45f65085b7a2bb *R/utils.R
 cfb43469b897aa42b6e391283b2d59be *README.md
-59a1a0a20317ae632cd1b1be492e5de3 *build/czso.pdf
-54561852dd8bef0d585189334641a10f *man/czso-package.Rd
+f7005558164c425512a9c57421e55267 *build/czso.pdf
+9391cf9e10a72ac19862f65eda7e7b40 *man/czso-package.Rd
 af19eee9c13e536aedc11048dbbf71d8 *man/czso_get_catalogue.Rd
 69c255cf7305c86e081a57699aa9f58b *man/czso_get_codelist.Rd
 9a667f49fc8f64f4e8a363470d937eea *man/czso_get_dataset_doc.Rd
@@ -34,4 +34,4 @@ d4a9f54b99771e199cf5a7e2e48c4778 *man/get_czso_table_schema.Rd
 576ec65936642eaad4c6002d2e5b61bf *man/get_table.Rd
 4894ca10756199e25f914bfd34f517b0 *man/pipe.Rd
 241abcbc3efdbaacdd377d123028caa0 *tests/testthat.R
-369def56339c37200b830eb367448300 *tests/testthat/test-czso_get_table.R
+22a1d17caad7758b7d2ff2a4c6feac39 *tests/testthat/test-core.R

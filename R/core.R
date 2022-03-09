@@ -4,7 +4,7 @@
 #' Retrieves a list of all CZSO's open datasets available from the Czech Open data catalogue.
 #'
 #' Pass the string in the `dataset_id` column to `get_czso_table()`. `dataset_iri`
-#' is the unique identifier of the dataset in the national catalague and also the URL
+#' is the unique identifier of the dataset in the national catalogue and also the URL
 #' containing all metadata for the dataset.
 #'
 #' @return a data frame with details on all CZSO datasets available in the Czech National Open Data Catalogue.
@@ -83,7 +83,7 @@ get_czso_catalogue <- function() {
 #' what is provided in the dataset's entry in the output of `czso_get_dataset()`.
 #'
 #' As far as I can tell there is no way to get the metadata in English, though
-#' some key datasets, such as codelists, do have English-languge documentation.
+#' some key datasets, such as codelists, do have English-language documentation.
 #' See `czso_get_table()` for how to access English-language codelists (registers).
 #'
 #' @param dataset_id Dataset ID
@@ -109,14 +109,14 @@ get_czso_catalogue <- function() {
 #' @export
 #' @family Additional tools
 czso_get_dataset_metadata <- function(dataset_id) {
-  if(!curl::has_internet()) usethis::ui_stop(c("No internet connection. Cannot continue. Retry when connected."))
+  if(!curl::has_internet()) cli::cli_abort(c("No internet connection. Cannot continue. Retry when connected."))
   url <- paste0("https://vdb.czso.cz/pll/eweb/package_show?id=", dataset_id)
   mtdt_c <- httr::GET(url,
                       httr::user_agent(ua_string)) %>%
     httr::stop_for_status() %>%
     httr::content(as = "text")
   mtdt <- jsonlite::fromJSON(mtdt_c)[["result"]]
-  if(is.null(mtdt)) usethis::ui_stop("No dataset found with this ID.")
+  if(is.null(mtdt)) cli::cli_abort("No dataset found with this ID.")
   return(mtdt)
 }
 
@@ -173,8 +173,8 @@ download_file <- function(url, dfile) {
 download_if_needed <- function(url, dfile, force_redownload) {
   if(is_above_bigsur()) stop_on_openssl()
   if(file.exists(dfile) & !force_redownload) {
-    usethis::ui_info(c("File already in {usethis::ui_path(dirname(dfile))}, not downloading.",
-                       "Set {usethis::ui_code('force_redownload = TRUE')} if needed."))
+    cli::cli_inform(c(i = "File already in {.path {dirname(dfile)}}, not downloading.",
+                     "Set {.code force_redownload = TRUE} if needed."))
   } else {
     curl_handle <- curl::new_handle() %>%
       curl::handle_setheaders(.list = ua_header)
@@ -226,7 +226,7 @@ get_czso_resource_pointer <- function(dataset_id, resource_num = 1) {
 #'
 #' Instead, here is a guide to some of the common column names you will encounter:
 #'
-#' - `idhod`: a unique ID of the value in the CZSO databse. This does not allow
+#' - `idhod`: a unique ID of the value in the CZSO database. This does not allow
 #' you to link to any other (meta)data as far as I know, but it does provide unique
 #' identification should you need it.
 #' - `hodnota`: the value.
@@ -278,16 +278,22 @@ get_czso_resource_pointer <- function(dataset_id, resource_num = 1) {
 #' @export
 czso_get_table <- function(dataset_id, dest_dir = NULL, force_redownload = FALSE, resource_num = 1) {
 
-  if(stringr::str_detect(dataset_id, "^cis")) {
-    usethis::ui_info("The dataset you are fetching seems to be a codelist.")
-    usethis::ui_todo("Use {usethis::ui_code(x = stringr::str_glue('czso_get_codelist(\"{dataset_id}\")'))} to load it using a dedicated function.")
+  if(grepl("^cis", dataset_id)) {
+
+    cd <- paste0('czso_get_codelist(', "\"", dataset_id ,"\")")
+
+    cli::cli_inform(c(i = "The dataset you are fetching seems to be a codelist."))
+    cli::cli_inform("Use {.code {cd}} to load it using a dedicated function.")
   }
 
   ptr <- get_czso_resource_pointer(dataset_id, resource_num = resource_num)
   url <- ptr$url
   type <- ptr$format
   ext <- tools::file_ext(url)
-  if(ext == "" | is.null(ext)) ext <- stringr::str_extract(type, "(?<=\\/).*$")
+  if(ext == "" | is.null(ext)) {
+    extm <- regexpr("(?<=\\/).*$", type, perl = TRUE)
+    ext <- regmatches(type, extm)
+  }
 
   if(is.null(dest_dir)) dest_dir <- getOption("czso.dest_dir",
                                               default = tempdir())
@@ -320,14 +326,14 @@ czso_get_table <- function(dataset_id, dest_dir = NULL, force_redownload = FALSE
             invi <- F
           },
           listone = {
-            usethis::ui_info(c("Unable to read this kind of file ({type}) automatically.",
-                               "It is saved in {usethis::ui_path(dfile)}."))
+            cli::cli_warn(c(x = "Unable to read this kind of file ({.value {type}}) automatically.",
+                                     i = "It is saved in {.path {dfile}}."))
             rtrn <- dfile
             invi <- T
           },
           listmore = {
-            usethis::ui_info(c("Multiple files in archive.",
-                               "They are saved in {usethis::ui_path(dirname(dfile))}"))
+            cli::cli_alert(c(x = "Multiple files in archive.",
+                             i = "They are saved in {.path {dirname(dfile)}}"))
             rtrn <- flist
             invi <- T
 
@@ -437,20 +443,18 @@ czso_get_codelist <- function(codelist_id,
   stopifnot(length(codelist_id) <= 2)
 
   if(length(codelist_id) == 1) {
-    if(is.numeric(codelist_id) | stringr::str_detect(codelist_id,
-                                                     "^[0-9]{2,4}$")) {
+    if(is.numeric(codelist_id) | grepl("^[0-9]{2,4}$", codelist_id)) {
       codelist_id <- paste0("cis", codelist_id)
     }
   } else if(length(codelist_id) == 2) {
-    if(is.numeric(codelist_id) | all(stringr::str_detect(codelist_id,
-                                                         "^[0-9]{2,4}$"))) {
+    if(is.numeric(codelist_id) | all(grepl("^[0-9]{2,4}$", codelist_id))) {
       codelist_id <- paste0("cis", codelist_id[1], "vaz", codelist_id[2])
     }
   }
 
-  if(!stringr::str_detect(codelist_id, "^cis")) {
-    usethis::ui_info(c("The value you passed to {usethis::ui_field('codelist_id')} does not seem to indicate a codelist.",
-                       "This may cause unexpected results."))
+  if(!grepl("^cis", codelist_id)) {
+    cli::cli_alert_warning(c("The value you passed to {.var codelist_id} does not seem to indicate a codelist.",
+                             "This may cause unexpected results."))
   }
 
   cis_meta <- get_czso_resources(codelist_id)
@@ -464,13 +468,13 @@ czso_get_codelist <- function(codelist_id,
 
     if(is.null(resource_num)) resource_num <- 1
 
-    usethis::ui_info("No documented CSV distribution found for this codelist. Using workaround.")
+    cli::cli_inform("No documented CSV distribution found for this codelist. Using workaround.")
 
     cis_url <- get_czso_resource_pointer(codelist_id, 1)[["url"]]
-    cis_url <- stringr::str_replace(cis_url, "format\\=0$", "format=2&separator=,")
+    cis_url <- sub("format\\=0$", "format=2&separator=,", cis_url)
   }
 
-  if(lng == "en") cis_url <- stringr::str_replace(cis_url, "cisjaz=203", "cisjaz=8260")
+  if(lng == "en") cis_url <- sub("cisjaz=203", "cisjaz=8260", cis_url)
 
   if(is.null(dest_dir)) dest_dir <- getOption("czso.dest_dir",
                                               default = tempdir())
@@ -522,8 +526,8 @@ czso_get_table_schema <- function(dataset_id, resource_num = 1) {
     ds <- suppressMessages(suppressWarnings(jsonlite::fromJSON(schema_result)[["tableSchema"]][["columns"]]))
     rslt <- tibble::as_tibble(ds)
   } else {
-    usethis::ui_stop("Cannot parse this type of file type.
-                     You can get it yourself from {usethis::ui_path(schema_url)}.")
+    cli::cli_abort(c("Cannot parse this type of file type.",
+                   i = "You can get it yourself from {.path{schema_url}}."))
     rslt <- schema_url
   }
   return(rslt)
@@ -571,17 +575,17 @@ czso_get_dataset_doc <- function(dataset_id,  action = c("return", "open", "down
   url_orig <- metadata$schema
   doc_url <- switch (frmt,
                      html = url_orig,
-                     word = stringr::str_replace(url_orig, "\\.html?", ".docx"),
-                     pdf = stringr::str_replace(url_orig, "\\.html?", ".pdf")
+                     word = sub("\\.html?", ".docx", url_orig),
+                     pdf = sub("\\.html?", ".pdf", url_orig)
   )
   act <- match.arg(action)
   if(is.null(destfile)) {dest <- basename(doc_url)} else {dest <- destfile}
   switch(act,
          open = {
-           usethis::ui_done("Opening {usethis::ui_path(doc_url)} in browser")
+           cli::cli_alert_success("Opening {.url{doc_url}} in browser")
            utils::browseURL(doc_url)},
          download = {utils::download.file(doc_url, destfile = dest, headers = ua_header, quiet = TRUE)
-           usethis::ui_done("Downloaded {usethis::ui_path(doc_url)} to {usethis::ui_path(dest)}")})
+           cli::cli_alert_success("Downloaded {.url {doc_url}} to {.path {dest}}")})
   if(act == "download") rslt <- dest else rslt <- doc_url
   if(act == "return") rslt else invisible(rslt)
 }

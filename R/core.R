@@ -6,7 +6,9 @@
 #' Pass the string in the `dataset_id` column to `get_czso_table()`. `dataset_iri`
 #' is the unique identifier of the dataset in the national catalogue and also the URL
 #' containing all metadata for the dataset.
-#'
+#' @param search_terms a regex pattern, or a vector of regex patterns, to filter the catalogue by.
+#' A case-insensitive filter is performed on the title, description and keywords.
+#' The search returns only catalogue entries where all the patterns are matched anywhere within the title, description or keywords.
 #' @return a data frame with details on all CZSO datasets available in the Czech National Open Data Catalogue.
 #' The columns are fairly well described by their names, except:
 #'
@@ -23,13 +25,14 @@
 #' @examples
 #' \donttest{
 #' czso_get_catalogue()
+#' czso_get_catalogue(search_terms = c("kraj", "me?zd"))
 #' }
-czso_get_catalogue <- function() {
+czso_get_catalogue <- function(search_terms = NULL) {
   url <- "https://vdb.czso.cz/pll/eweb/lkod_ld.seznam"
 
   if(is_above_bigsur()) stop_on_openssl()
 
-  suppressWarnings(readr::read_csv(url,
+  ctlg <- suppressWarnings(readr::read_csv(url,
                                    col_types = readr::cols(
                                      dataset_iri = readr::col_character(),
                                      dataset_id = readr::col_character(),
@@ -46,35 +49,50 @@ czso_get_catalogue <- function() {
                                    ))) %>%
     dplyr::mutate(periodicity = dplyr::recode(.data$periodicity, nikdy = "NEVER"))
 
+  if(!is.null(search_terms)) {
+    czso_filter_catalogue(ctlg, search_terms)
+  } else {
+    ctlg
+  }
+
 }
 
-#' Deprecated: use `czso_get_catalogue()` instead
+#' Filter the catalogue using a set of keywords
 #'
-#' \lifecycle{deprecated}
+#' @param catalogue a catalogue as returned by `czso_get_catalogue()`
+#' @param search_terms #' A regex pattern (incl. plain text), or a vector of regex patterns, to filter the catalogue by.
+#' A case-insensitive filter is performed on the title, description and keywords.
+#' The search returns only catalogue entries where all the patterns are matched anywhere within the title, description or keywords.
 #'
-#' @return a tibble
-#' @keywords internal
-#' @examples
-#' # see `czso_get_catalogue()`
+#' @return A tibble with the filtered catalogue.
 #' @export
-get_catalogue <- function() {
-  lifecycle::deprecate_stop("0.2.0", "czso::get_catalogue()", "czso_get_catalogue()")
-  czso_get_catalogue()
+#'
+#' @examples
+#' ctlg <- czso_get_catalogue()
+#' czso_filter_catalogue(ctlg, search_terms = c("kraj", "me?zd"))
+#' czso_filter_catalogue(ctlg, search_terms = c("úmrt", "orp"))
+#' czso_filter_catalogue(ctlg, search_terms = c("kraj", "vazba", "orp"))
+#' czso_filter_catalogue(ctlg, search_terms = c("ISCO", "číselník"))
+#' czso_filter_catalogue(ctlg, search_terms = c("zaměstnání", "číselník"))
+czso_filter_catalogue <- function(catalogue, search_terms) {
+  # Initialize an empty vector to store IDs of the relevant catalogue entries
+  relevant_ids <- c()
+
+  # Iterate over each row in the input data frame
+  for (i in 1:nrow(catalogue)) {
+    row <- catalogue[i, c("dataset_id", "title", "description", "keywords_all")]
+    # Check if any of the patterns match in any of the three text columns
+    if (all(sapply(search_terms, function(pattern) any(grepl(pattern, row,
+                                                             ignore.case = TRUE))))){
+      # Append the row to the filtered data frame
+      relevant_ids <- c(relevant_ids, row[["dataset_id"]])
+    }
+  }
+  filtered_catalogue <- catalogue[catalogue$dataset_id %in% relevant_ids, ]
+
+  filtered_catalogue
 }
 
-#' Deprecated, use `czso_get_catalogue()` instead.
-#'
-#' \lifecycle{deprecated}
-#'
-#' @return a tibble
-#' @keywords internal
-#' @examples
-#' # see `czso_get_catalogue()`
-#' @export
-get_czso_catalogue <- function() {
-  lifecycle::deprecate_stop("0.2.1", "czso::get_czso_catalogue()", "czso_get_catalogue()")
-  czso_get_catalogue()
-}
 
 
 #' Get dataset metadata
@@ -110,34 +128,21 @@ get_czso_catalogue <- function() {
 #' @family Additional tools
 czso_get_dataset_metadata <- function(dataset_id) {
   if(!curl::has_internet()) cli::cli_abort(c("No internet connection. Cannot continue. Retry when connected."))
-  url <- paste0("https://vdb.czso.cz/pll/eweb/package_show?id=", dataset_id)
+  url <- paste0("https://vdb.czso.cz/pll/eweb/lkod_ld.datova_sada?id=", dataset_id)
   mtdt_c <- httr::GET(url,
                       httr::user_agent(ua_string)) %>%
     httr::stop_for_status() %>%
     httr::content(as = "text")
-  mtdt_c_sanitised <- gsub("\\t", "\\s", mtdt_c)
-  mtdt <- jsonlite::fromJSON(mtdt_c_sanitised)[["result"]]
+  # mtdt_c_sanitised <- gsub("\\t", "\\s", mtdt_c)
+  mtdt <- jsonlite::fromJSON(mtdt_c)
+  # print(mtdt)
   if(is.null(mtdt)) cli::cli_abort("No dataset found with this ID.")
   return(mtdt)
 }
 
-#' Deprecated, use `czso_get_catalogue()` instead.
-#'
-#' \lifecycle{deprecated}
-#'
-#' @inheritParams czso_get_dataset_metadata
-#'
-#' @return a list
-#' @export
-#' @family Additional tools
-get_czso_dataset_metadata <- function(dataset_id) {
-  lifecycle::deprecate_stop("0.2.1", "czso::get_czso_dataset_metadata()",
-                            "czso_get_dataset_metadata()")
-  czso_get_dataset_metadata(dataset_id = dataset_id)
-}
 get_czso_resources <- function(dataset_id) {
   mtdt <- czso_get_dataset_metadata(dataset_id)
-  return(mtdt$resources)
+  return(mtdt[["distribuce"]])
 }
 
 
@@ -190,9 +195,14 @@ get_dl_path <- function(dataset_id, dir = tempdir(), ext) {
   return(dfile)
 }
 
+slova <- c(url = stringi::stri_unescape_unicode("p\\u0159\\u00edstupov\\u00e9_url"),
+           schema = stringi::stri_unescape_unicode("sch\\u00e9ma"),
+           format = stringi::stri_unescape_unicode("form\\u00e1t"))
+
 get_czso_resource_pointer <- function(dataset_id, resource_num = 1) {
-  rsrc <- get_czso_resources(dataset_id)[resource_num,] %>%
-    dplyr::select(.data$url, .data$format, meta_link = .data$describedBy, meta_format = .data$describedByType)
+  rsrc0 <- get_czso_resources(dataset_id)[resource_num,]
+  rsrc <- rsrc0[,c(slova['url'], slova['format'], slova['schema'])]
+  names(rsrc)[3] <- 'meta_link'
   return(rsrc)
 }
 
@@ -288,12 +298,12 @@ czso_get_table <- function(dataset_id, dest_dir = NULL, force_redownload = FALSE
   }
 
   ptr <- get_czso_resource_pointer(dataset_id, resource_num = resource_num)
-  url <- ptr$url
-  type <- ptr$format
+  url <- ptr[[slova['url']]]
+  type <- ptr[[slova['format']]]
   ext <- tools::file_ext(url)
   if(ext == "" | is.null(ext)) {
     extm <- regexpr("(?<=\\/).*$", type, perl = TRUE)
-    ext <- regmatches(type, extm)
+    ext <- tolower(regmatches(type, extm))
   }
 
   if(is.null(dest_dir)) dest_dir <- getOption("czso.dest_dir",
@@ -305,7 +315,7 @@ czso_get_table <- function(dataset_id, dest_dir = NULL, force_redownload = FALSE
 
   # print(dfile)
 
-  if(type == "text/csv") {
+  if(type == "http://publications.europa.eu/resource/authority/file-type/CSV") {
     action <- "read"
   } else if(type == "application/zip") {
     utils::unzip(dfile, exdir = dirname(dfile))
@@ -341,25 +351,6 @@ czso_get_table <- function(dataset_id, dest_dir = NULL, force_redownload = FALSE
           }
   )
   if(invi) invisible(rtrn) else return(rtrn)
-}
-
-
-#' Deprecated: use `czso_get_table()` instead.
-#'
-#' \lifecycle{deprecated}.
-#'
-#' @inheritParams czso_get_table
-#'
-#' @return a [tibble][tibble::tibble-package]
-#' @family Core workflow
-#' @examples
-#' # see `czso_get_table()`
-#' @export
-get_table <- function(dataset_id, resource_num = 1, force_redownload = FALSE) {
-  lifecycle::deprecate_stop("0.2.0", "czso::get_table()", "czso_get_table()")
-  czso_get_table(dataset_id = dataset_id,
-                 resource_num = resource_num,
-                 force_redownload = force_redownload)
 }
 
 #' Get CZSO codelist (registry / číselník)
@@ -460,7 +451,8 @@ czso_get_codelist <- function(codelist_id,
 
   cis_meta <- get_czso_resources(codelist_id)
 
-  cis_url <- cis_meta[cis_meta$format == "text/csv", "url"]
+  cis_url <- cis_meta[cis_meta[slova['format']] == "http://publications.europa.eu/resource/authority/file-type/CSV",
+                      slova['url']]
 
   if(length(cis_url) < 1) {
     # usethis::ui_stop(c("No CSV distribution for this codelist found.",
@@ -519,8 +511,7 @@ czso_get_codelist <- function(codelist_id,
 czso_get_table_schema <- function(dataset_id, resource_num = 1) {
   urls <- get_czso_resource_pointer(dataset_id, resource_num)
   schema_url <- urls$meta_link
-  schema_type <- urls$meta_format
-  is_json <- schema_type == "application/json"
+  is_json <- grepl(pattern = "json$", x = schema_url)
   if(is_json) {
     suppressMessages(suppressWarnings(schema_result <- httr::GET(schema_url, httr::user_agent(ua_string)) %>%
                                         httr::content(as = "text")))
@@ -528,27 +519,11 @@ czso_get_table_schema <- function(dataset_id, resource_num = 1) {
     rslt <- tibble::as_tibble(ds)
   } else {
     cli::cli_abort(c("Cannot parse this type of file type.",
-                   i = "You can get it yourself from {.path{schema_url}}."))
+                   i = "You can get it yourself from {.url {schema_url}}."))
     rslt <- schema_url
   }
   return(rslt)
 }
-
-#' Deprecated: use `czso_get_table_schema()` instead
-#'
-#' \lifecycle{deprecated}
-#'
-#' @inheritParams czso_get_table_schema
-#'
-#' @return a list
-#' @export
-#' @family Additional tools
-get_czso_table_schema <- function(dataset_id, resource_num) {
-  lifecycle::deprecate_stop("0.2.1", "czso::get_czso_table_schema()",
-                            "czso_get_table_schema()")
-  czso_get_table_schema(dataset_id = dataset_id, resource_num = resource_num)
-}
-
 
 #' Get documentation for CZSO dataset
 #'
@@ -573,7 +548,7 @@ get_czso_table_schema <- function(dataset_id, resource_num) {
 czso_get_dataset_doc <- function(dataset_id,  action = c("return", "open", "download"), destfile = NULL, format = c("html", "pdf", "word")) {
   metadata <- czso_get_dataset_metadata(dataset_id)
   frmt <- match.arg(format)
-  url_orig <- metadata$schema
+  url_orig <- metadata[['distribuce']][[slova['schema']]]
   doc_url <- switch (frmt,
                      html = url_orig,
                      word = sub("\\.html?", ".docx", url_orig),
@@ -590,20 +565,3 @@ czso_get_dataset_doc <- function(dataset_id,  action = c("return", "open", "down
   if(act == "download") rslt <- dest else rslt <- doc_url
   if(act == "return") rslt else invisible(rslt)
 }
-
-#' Deprecated: use `czso_get_dataset_doc()` instead
-#'
-#' \lifecycle{deprecated}
-#'
-#' @inheritParams czso_get_dataset_doc
-#'
-#' @return a list
-#' @export
-#' @family Additional tools
-get_czso_dataset_doc <- function(dataset_id,  action = c("return", "open", "download"), destfile = NULL, format = c("html", "pdf", "word")) {
-  lifecycle::deprecate_stop("0.2.1", "czso::get_czso_dataset_doc()",
-                            "czso_get_dataset_doc()")
-  czso_get_dataset_doc(dataset_id = dataset_id, action = action, destfile = destfile, format = format)
-}
-
-

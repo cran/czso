@@ -1,6 +1,6 @@
 Package: czso
 Title: Use Open Data from the Czech Statistical Office in R
-Version: 0.3.12
+Version: 0.4.1
 Authors@R: c(
     person("Petr", "Bouchal", , "pbouchal@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-0471-716X")),
@@ -19,11 +19,11 @@ Suggests: testthat
 RdMacros: lifecycle
 Encoding: UTF-8
 Language: en
-RoxygenNote: 7.3.1
+RoxygenNote: 7.3.2
 NeedsCompilation: no
-Packaged: 2024-04-03 13:49:34 UTC; petr
+Packaged: 2024-07-20 23:11:47 UTC; petr
 Author: Petr Bouchal [aut, cre] (<https://orcid.org/0000-0002-0471-716X>),
   Jindra Lacko [ctb]
 Maintainer: Petr Bouchal <pbouchal@gmail.com>
 Repository: CRAN
-Date/Publication: 2024-04-03 14:03:03 UTC
+Date/Publication: 2024-07-20 23:30:01 UTC

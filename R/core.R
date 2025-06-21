@@ -1,100 +1,4 @@
 
-#' Get catalogue of open CZSO datasets
-#'
-#' Retrieves a list of all CZSO's open datasets available from the Czech Open data catalogue.
-#'
-#' Pass the string in the `dataset_id` column to `get_czso_table()`. `dataset_iri`
-#' is the unique identifier of the dataset in the national catalogue and also the URL
-#' containing all metadata for the dataset.
-#' @param search_terms a regex pattern, or a vector of regex patterns, to filter the catalogue by.
-#' A case-insensitive filter is performed on the title, description and keywords.
-#' The search returns only catalogue entries where all the patterns are matched anywhere within the title, description or keywords.
-#' @return a data frame with details on all CZSO datasets available in the Czech National Open Data Catalogue.
-#' The columns are fairly well described by their names, except:
-#'
-#' - some columns contain IRIs instead of human readable text; still you can deduce the content from the IRI.
-#' - the `spatial` columns contains an IRI ending in the pattern `{unit_type}`/`{unit_code}`.
-#' The unit_type denotes what unit the data covers (scope/domain not granularity) and the second identifies the unit covered.
-#' The unit_type will usually be `"stat"` for "state" and the unit_code will be 1.
-#' The unit_type can also be `"KR"` for region or `"OB"` for municipality, or `"OK"` for district.
-#' In that case, the unit_code will be a code of that unit.
-#' - `page` points to the documentation, i.e. methodology notes for the dataset.
-#'
-#' @export
-#' @family Core workflow
-#' @examples
-#' \donttest{
-#' czso_get_catalogue()
-#' czso_get_catalogue(search_terms = c("kraj", "me?zd"))
-#' }
-czso_get_catalogue <- function(search_terms = NULL) {
-  url <- "https://vdb.czso.cz/pll/eweb/lkod_ld.seznam"
-
-  if(is_above_bigsur()) stop_on_openssl()
-
-  ctlg <- suppressWarnings(readr::read_csv(url,
-                                   col_types = readr::cols(
-                                     dataset_iri = readr::col_character(),
-                                     dataset_id = readr::col_character(),
-                                     title = readr::col_character(),
-                                     provider = readr::col_character(),
-                                     description = readr::col_character(),
-                                     spatial = readr::col_character(),
-                                     modified = readr::col_date(format = ""),
-                                     page = readr::col_character(),
-                                     periodicity = readr::col_character(),
-                                     start = readr::col_date(format = ""),
-                                     end = readr::col_date(format = ""),
-                                     keywords_all = readr::col_character()
-                                   ))) %>%
-    dplyr::mutate(periodicity = dplyr::recode(.data$periodicity, nikdy = "NEVER"))
-
-  if(!is.null(search_terms)) {
-    czso_filter_catalogue(ctlg, search_terms)
-  } else {
-    ctlg
-  }
-
-}
-
-#' Filter the catalogue using a set of keywords
-#'
-#' @param catalogue a catalogue as returned by `czso_get_catalogue()`
-#' @param search_terms #' A regex pattern (incl. plain text), or a vector of regex patterns, to filter the catalogue by.
-#' A case-insensitive filter is performed on the title, description and keywords.
-#' The search returns only catalogue entries where all the patterns are matched anywhere within the title, description or keywords.
-#'
-#' @return A tibble with the filtered catalogue.
-#' @export
-#'
-#' @examples
-#' ctlg <- czso_get_catalogue()
-#' czso_filter_catalogue(ctlg, search_terms = c("kraj", "me?zd"))
-#' czso_filter_catalogue(ctlg, search_terms = c("úmrt", "orp"))
-#' czso_filter_catalogue(ctlg, search_terms = c("kraj", "vazba", "orp"))
-#' czso_filter_catalogue(ctlg, search_terms = c("ISCO", "číselník"))
-#' czso_filter_catalogue(ctlg, search_terms = c("zaměstnání", "číselník"))
-czso_filter_catalogue <- function(catalogue, search_terms) {
-  # Initialize an empty vector to store IDs of the relevant catalogue entries
-  relevant_ids <- c()
-
-  # Iterate over each row in the input data frame
-  for (i in 1:nrow(catalogue)) {
-    row <- catalogue[i, c("dataset_id", "title", "description", "keywords_all")]
-    # Check if any of the patterns match in any of the three text columns
-    if (all(sapply(search_terms, function(pattern) any(grepl(pattern, row,
-                                                             ignore.case = TRUE))))){
-      # Append the row to the filtered data frame
-      relevant_ids <- c(relevant_ids, row[["dataset_id"]])
-    }
-  }
-  filtered_catalogue <- catalogue[catalogue$dataset_id %in% relevant_ids, ]
-
-  filtered_catalogue
-}
-
-
-
 #' Get dataset metadata
 #'
 #' Get metadata from CZSO API, which can be somewhat more detailed/readable than
@@ -140,15 +44,15 @@ czso_get_dataset_metadata <- function(dataset_id) {
   return(mtdt)
 }
 
-get_czso_resources <- function(dataset_id) {
+czso_get_resources <- function(dataset_id) {
   mtdt <- czso_get_dataset_metadata(dataset_id)
   return(mtdt[["distribuce"]])
 }
 
 
-# Internal utilities ------------------------------------------------------
+# Lower-level functions ------------------------------------------------------
 
-read_czso_csv <- function(dfile) {
+czso_read_csv <- function(dfile) {
   guessed_enc <- readr::guess_encoding(dfile)
   guessed_enc <- ifelse(length(guessed_enc$encoding) == 0 || guessed_enc$encoding[[1]] == "windows-1252",
                         "windows-1250", # a sensible default, considering...
@@ -168,7 +72,7 @@ read_czso_csv <- function(dfile) {
                                                           locale = readr::locale(encoding = guessed_enc))))
 }
 
-download_file <- function(url, dfile) {
+czso_download_file <- function(url, dfile) {
   if(is_above_bigsur()) stop_on_openssl()
   curl_handle <- curl::new_handle() %>%
     curl::handle_setheaders(.list = ua_header)
@@ -176,40 +80,70 @@ download_file <- function(url, dfile) {
   return(dfile)
 }
 
-download_if_needed <- function(url, dfile, force_redownload) {
+czso_download_if_needed <- function(url, dfile, force_redownload) {
   if(is_above_bigsur()) stop_on_openssl()
   if(file.exists(dfile) & !force_redownload) {
     cli::cli_inform(c(i = "File already in {.path {dirname(dfile)}}, not downloading.",
                      "Set {.code force_redownload = TRUE} if needed."))
+    return(dfile)
   } else {
     curl_handle <- curl::new_handle() %>%
       curl::handle_setheaders(.list = ua_header)
     curl::curl_download(url, dfile, handle = curl_handle)
+    return(dfile)
   }
 }
 
-get_dl_path <- function(dataset_id, dir = tempdir(), ext) {
+czso_get_dl_path <- function(dataset_id, dir = tempdir(), ext) {
   td <- file.path(dir, dataset_id)
   dir.create(td, showWarnings = FALSE, recursive = TRUE)
   dfile <- paste0(td, "/ds_", dataset_id, ".", ext)
   return(dfile)
 }
 
-slova <- c(url = stringi::stri_unescape_unicode("p\\u0159\\u00edstupov\\u00e9_url"),
-           schema = stringi::stri_unescape_unicode("sch\\u00e9ma"),
-           format = stringi::stri_unescape_unicode("form\\u00e1t"))
+unescape_unicode <- function(x) {
+  # Extract all unicode escape sequences
+  matches <- gregexpr("\\\\u([0-9a-fA-F]{4})", x, perl = TRUE)
 
-get_czso_resource_pointer <- function(dataset_id, resource_num = 1) {
-  rsrc0 <- get_czso_resources(dataset_id)[resource_num,]
+  if (matches[[1]][1] == -1) {
+    return(x)  # No matches found
+  }
+
+  # Get the matched strings
+  matched_strings <- regmatches(x, matches)[[1]]
+
+  # Convert each match to its unicode character
+  replacements <- sapply(matched_strings, function(match) {
+    hex_code <- sub("\\\\u", "", match)
+    intToUtf8(strtoi(hex_code, 16))
+  })
+
+  # Replace all matches
+  for (i in seq_along(matched_strings)) {
+    x <- gsub(matched_strings[i], replacements[i], x, fixed = TRUE)
+  }
+
+  return(x)
+}
+
+slova <- c(url = unescape_unicode("p\\u0159\\u00edstupov\\u00e9_url"),
+           schema = unescape_unicode("sch\\u00e9ma"),
+           format = unescape_unicode("form\\u00e1t"))
+
+czso_get_resource_pointer <- function(dataset_id, resource_num = 1) {
+  rsrc0 <- czso_get_resources(dataset_id)[resource_num,]
   rsrc <- rsrc0[,c(slova['url'], slova['format'], slova['schema'])]
   names(rsrc)[3] <- 'meta_link'
   return(rsrc)
 }
 
+czso_get_resource_url <- function(dataset_id = NULL, resource_num = 1) {
+  pntr <- czso_get_resource_pointer(dataset_id = dataset_id, resource_num = resource_num)
+  return(pntr[[slova['url']]])
+}
 
-# Key workflow ------------------------------------------------------------
 
-
+# Top-level workflow functions ------------------------------------------------------------
 
 #' Retrieve and read dataset from CZSO
 #'
@@ -297,21 +231,21 @@ czso_get_table <- function(dataset_id, dest_dir = NULL, force_redownload = FALSE
     cli::cli_inform("Use {.code {cd}} to load it using a dedicated function.")
   }
 
-  ptr <- get_czso_resource_pointer(dataset_id, resource_num = resource_num)
+  ptr <- czso_get_resource_pointer(dataset_id, resource_num = resource_num)
   url <- ptr[[slova['url']]]
   type <- ptr[[slova['format']]]
   ext <- tools::file_ext(url)
   if(ext == "" | is.null(ext)) {
-    extm <- regexpr("(?<=\\/).*$", type, perl = TRUE)
+    extm <- regexpr("(?<=\\/)[a-zA-Z0-9]{2,5}$", type, perl = TRUE)
     ext <- tolower(regmatches(type, extm))
   }
 
   if(is.null(dest_dir)) dest_dir <- getOption("czso.dest_dir",
                                               default = tempdir())
 
-  dfile <- get_dl_path(dataset_id, dest_dir, ext)
+  dfile <- czso_get_dl_path(dataset_id, dest_dir, ext)
 
-  download_if_needed(url, dfile, force_redownload)
+  czso_download_if_needed(url, dfile, force_redownload)
 
   # print(dfile)
 
@@ -333,7 +267,7 @@ czso_get_table <- function(dataset_id, dest_dir = NULL, force_redownload = FALSE
   }
   switch (action,
           read = {
-            rtrn <- read_czso_csv(dfile)
+            rtrn <- czso_read_csv(dfile)
             invi <- F
           },
           listone = {
@@ -428,7 +362,7 @@ czso_get_codelist <- function(codelist_id,
                               language = c("cs", "en"),
                               dest_dir = NULL,
                               resource_num = NULL,
-                              force_redownload = F) {
+                              force_redownload = FALSE) {
 
   lng <- match.arg(language)
 
@@ -449,7 +383,7 @@ czso_get_codelist <- function(codelist_id,
                              "This may cause unexpected results."))
   }
 
-  cis_meta <- get_czso_resources(codelist_id)
+  cis_meta <- czso_get_resources(codelist_id)
 
   cis_url <- cis_meta[cis_meta[slova['format']] == "http://publications.europa.eu/resource/authority/file-type/CSV",
                       slova['url']]
@@ -463,7 +397,7 @@ czso_get_codelist <- function(codelist_id,
 
     cli::cli_inform("No documented CSV distribution found for this codelist. Using workaround.")
 
-    cis_url <- get_czso_resource_pointer(codelist_id, 1)[["url"]]
+    cis_url <- czso_get_resource_pointer(codelist_id, 1)[["url"]]
     cis_url <- sub("format\\=0$", "format=2&separator=,", cis_url)
   }
 
@@ -471,97 +405,13 @@ czso_get_codelist <- function(codelist_id,
 
   if(is.null(dest_dir)) dest_dir <- getOption("czso.dest_dir",
                                               default = tempdir())
-  dfile <- get_dl_path(codelist_id, dest_dir, "csv")
+  dfile <- czso_get_dl_path(codelist_id, dest_dir, "csv")
 
-  download_if_needed(cis_url, dfile, force_redownload)
+  czso_download_if_needed(cis_url, dfile, force_redownload)
 
-  dt <- read_czso_csv(dfile)
+  dt <- czso_read_csv(dfile)
 
   return(dt)
 }
 
 
-# Utilities ---------------------------------------------------------------
-
-
-
-#' Get CZSO table schema
-#'
-#' Retrieves and parses the schema for the table identified by dataset_id and resource_num.
-#'
-#' Currently only handles JSON schema files for CSV files.
-#' If the schema is a different format, an error is returned pointing the user to the URL of the file.
-#'
-#' @param dataset_id Dataset ID
-#' @param resource_num Resource number, typically 1 in CZSO (the default)
-#'
-#' @return a tibble with a description of the table columns, with the following items:
-#' - `name`: the column name.
-#' - `titles`: usually the duplicate of `name`
-#' - `dc:description`: a Czech-language description of the column
-#' - `required`: whether the column is required
-#' - `datatatype`: the data type of the column; either "number" or "string"
-#'
-#' @examples
-#' \donttest{
-#' czso_get_table_schema("110080")
-#' }
-#' @export
-#' @family Additional tools
-czso_get_table_schema <- function(dataset_id, resource_num = 1) {
-  urls <- get_czso_resource_pointer(dataset_id, resource_num)
-  schema_url <- urls$meta_link
-  is_json <- grepl(pattern = "json$", x = schema_url)
-  if(is_json) {
-    suppressMessages(suppressWarnings(schema_result <- httr::GET(schema_url, httr::user_agent(ua_string)) %>%
-                                        httr::content(as = "text")))
-    ds <- suppressMessages(suppressWarnings(jsonlite::fromJSON(schema_result)[["tableSchema"]][["columns"]]))
-    rslt <- tibble::as_tibble(ds)
-  } else {
-    cli::cli_abort(c("Cannot parse this type of file type.",
-                   i = "You can get it yourself from {.url {schema_url}}."))
-    rslt <- schema_url
-  }
-  return(rslt)
-}
-
-#' Get documentation for CZSO dataset
-#'
-#' Retrieves the URL/downloads the file containing the documentation of the dataset, in the required format.
-#'
-#' The document to which this functions provides access contains methodological
-#' background on the specified dataset and is identified by the `schema` field
-#' in the list returned by `czso_get_dataset_metadata()`.
-#'
-#' @param dataset_id Dataset ID
-#' @param action Whether to `return` URL (the default), `download` the file, or `open` the URL in the default web browser.
-#' @param destfile Where to save the file. Only used if if `action = download`.
-#' @param format What file format to access: `html` (the default), `pdf`, or `word`.
-#'
-#' @return if `action = download`, the path to the downloaded file; file URL otherwise.
-#' @examples
-#' \donttest{
-#' czso_get_dataset_doc("110080")
-#' }
-#' @export
-#' @family Additional tools
-czso_get_dataset_doc <- function(dataset_id,  action = c("return", "open", "download"), destfile = NULL, format = c("html", "pdf", "word")) {
-  metadata <- czso_get_dataset_metadata(dataset_id)
-  frmt <- match.arg(format)
-  url_orig <- metadata[['distribuce']][[slova['schema']]]
-  doc_url <- switch (frmt,
-                     html = url_orig,
-                     word = sub("\\.html?", ".docx", url_orig),
-                     pdf = sub("\\.html?", ".pdf", url_orig)
-  )
-  act <- match.arg(action)
-  if(is.null(destfile)) {dest <- basename(doc_url)} else {dest <- destfile}
-  switch(act,
-         open = {
-           cli::cli_alert_success("Opening {.url{doc_url}} in browser")
-           utils::browseURL(doc_url)},
-         download = {utils::download.file(doc_url, destfile = dest, headers = ua_header, quiet = TRUE)
-           cli::cli_alert_success("Downloaded {.url {doc_url}} to {.path {dest}}")})
-  if(act == "download") rslt <- dest else rslt <- doc_url
-  if(act == "return") rslt else invisible(rslt)
-}

@@ -9,7 +9,7 @@ czso_get_codelist(
   language = c("cs", "en"),
   dest_dir = NULL,
   resource_num = NULL,
-  force_redownload = F
+  force_redownload = FALSE
 )
 }
 \arguments{
@@ -95,6 +95,7 @@ czso_get_codelist("cis100vaz43")
 }
 \seealso{
 Other Core workflow: 
+\code{\link{czso_filter_catalogue}()},
 \code{\link{czso_get_catalogue}()},
 \code{\link{czso_get_table}()}
 }

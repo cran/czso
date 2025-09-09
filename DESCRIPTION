@@ -1,13 +1,13 @@
 Package: czso
 Title: Use Open Data from the Czech Statistical Office in R
-Version: 0.4.2
+Version: 0.4.3
 Authors@R: c(
     person("Petr", "Bouchal", , "pbouchal@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-0471-716X")),
     person("Jindra", "Lacko", role = "ctb")
   )
 Description: Get programmatic access to the open data provided by the
-    Czech Statistical Office (CZSO, <https://czso.cz>).
+    Czech Statistical Office (CZSO, <https://csu.gov.cz>).
 License: MIT + file LICENSE
 URL: https://github.com/petrbouchal/czso, https://petrbouchal.xyz/czso/
 BugReports: https://github.com/petrbouchal/czso/issues
@@ -19,12 +19,12 @@ Suggests: rmarkdown, testthat
 RdMacros: lifecycle
 Encoding: UTF-8
 Language: en
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 NeedsCompilation: no
-Packaged: 2025-06-21 10:10:47 UTC; petr
+Packaged: 2025-09-09 21:47:47 UTC; rstudio
 Author: Petr Bouchal [aut, cre] (ORCID:
     <https://orcid.org/0000-0002-0471-716X>),
   Jindra Lacko [ctb]
 Maintainer: Petr Bouchal <pbouchal@gmail.com>
 Repository: CRAN
-Date/Publication: 2025-06-21 10:40:10 UTC
+Date/Publication: 2025-09-09 23:00:02 UTC

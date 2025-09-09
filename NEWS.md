@@ -1,4 +1,9 @@
-# czso 0.5.0
+# czso 0.4.3
+
+* update URL in tagline to csu.gov.cz
+* re-release after CZSO domain certificate caused CRAN removal
+
+# czso 0.4.2
 
 * fix issue in `czso_get_table_schema()` detecting JSON format in schema URL
 * make less use of the stringi dependency

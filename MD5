@@ -1,8 +1,8 @@
-843f1c6fdb2f34e9824fdb116f9e9f0c *DESCRIPTION
+c917f48c18f6d7c7db0fd0241aa67761 *DESCRIPTION
 e93612f822b7371354b4b2e86d778f22 *LICENSE
 3daad9d7d26c96af14438bc598385716 *NAMESPACE
-59f70b19977ed94db067c12e01e73631 *NEWS.md
-5a56d93bcffe84bc7f8f2373d617ad19 *R/catalogue.R
+a0233f86cf1586326d23349adcd092f4 *NEWS.md
+202945f31d9cb89590f3c065620a7804 *R/catalogue.R
 71b1f5b001c1f5728a5d3134d7217658 *R/core.R
 8156a6e35404f8e4617450f02813e804 *R/czso-package.R
 65cef5e0674056f6fc07dd2b3ca85c13 *R/utils-pipe.R
@@ -10,7 +10,7 @@ e93612f822b7371354b4b2e86d778f22 *LICENSE
 280b202726a9175ff5a35cfa673530a0 *R/workflow-utilities.R
 98fdb3ee5ac4a8c645a90a2f9cb11012 *README.md
 3833ef1fe10d8fc6d1c5757c1fbeb5f4 *man/czso-package.Rd
-66334e43d128de9ce531cbe51e7ca224 *man/czso_filter_catalogue.Rd
+ebd393ac08f72547398bd6f77e867884 *man/czso_filter_catalogue.Rd
 f14d98d3f479a5a09a5bed5eaae14c8a *man/czso_get_catalogue.Rd
 77829ec346bd1f672a74cf6cedd5484f *man/czso_get_codelist.Rd
 f21582fdf75dd4a8140bb8d236c10073 *man/czso_get_dataset_doc.Rd
@@ -31,6 +31,6 @@ c3978703d8f40f2679795335715e98f4 *man/figures/lifecycle-experimental.svg
 6c5a4e93db0c94037a71d11eb8239aa0 *man/monterey.Rd
 4894ca10756199e25f914bfd34f517b0 *man/pipe.Rd
 241abcbc3efdbaacdd377d123028caa0 *tests/testthat.R
-a412d191878decb088239deee1bae23b *tests/testthat/test-catalogue.R
+1fc10f6850dfc9f798e84199cae4e77b *tests/testthat/test-catalogue.R
 1dc8e216669f00e8eab5ea74fa06117c *tests/testthat/test-core.R
-02982225b35826c3c0c4ce2f2d69e5bb *tests/testthat/test-workflow-utilities.R
+37b63effc7ed657d1f023fa8363b9ac8 *tests/testthat/test-workflow-utilities.R
